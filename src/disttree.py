@@ -1,8 +1,8 @@
-# - Start Header ------------------------------------------------------------
+# Start Header ------------------------------------------------------------
 #
 #    File Name: disttree.py
 #
-#    Revision : 1.06
+#    Revision : 1.10
 #
 #    Purpose  : copy files to a distribution tree
 #
@@ -12,6 +12,9 @@
 #
 #    Author       Date        Comments
 #    ------------------------------------------------------------------------
+#    UHoffmann    01Jun2005   Optionally initialize variables from environment
+#    UHoffmann    29Oct2004   Added Wildcard handling
+#    UHoffmann    29Oct2004   Improved error handling in copy
 #    UHoffmann    23Mar2004   Added %if $VAR==val
 #    UHoffmann    15May2002   Added %for and %end-for w/ synchronous vars
 #    UHoffmann    14May2002   fixed double eval bug in assignement and -D hdler
@@ -57,7 +60,7 @@
 # %else, %endif; output by %print resp. %error (aborts processing)
 #
 
-import os, sys, shutil, getopt, re, string
+import os, sys, shutil, getopt, re, string, glob
 
 # Regular expression for different kinds of lines
 ASSIGNEMENT=re.compile("[ \t]*([_a-zA-Z][_a-zA-Z0-9]*)[ \t]*=(.*)$")
@@ -145,10 +148,10 @@ def copy(src,destdir):
                             raise type, value
                     if resetAttributes:
                         os.chmod(destfile,0666)
-            except IOError, msg:
+            except EnvironmentError, msg:
                 if verbose:
                     print "%-40s -|-> %s" % (src,destdir),
-                error("Copy failed for file %s (%s)" % (src,msg))
+                error("Copy failed for file '%s' (%s)" % (src,msg))
                 if retryQuestion:
                     retry=askRetryQuestion()
                 if not retry:
@@ -163,7 +166,6 @@ def copy(src,destdir):
             if md5sums:
                 logfile.write("%s *" % (md5digest(src),))
             logfile.write("%s\n" % (destfile,))
-
 
     else:
         # src no dir nor file
@@ -447,11 +449,12 @@ def disttree(specfilename, variables={}):
         # none of that above: assume file to copy
 
         # remove surrounding quotes, if any
-        m=QUOTED.match(line)
-        if m:
-            line=m.group(1)
+        quoted=QUOTED.match(line)
+        if quoted:
+            line=quoted.group(1)
 
         src=subst(line, variables)
+
         if destdir=="":
             error("No destination directory specified")
             sys.exit(4)
@@ -459,7 +462,17 @@ def disttree(specfilename, variables={}):
         if not os.path.isdir(destdir):
             makedir(destdir)
 
-        copy(src,destdir)
+        if quoted:
+            copy(src,destdir)
+        else:
+            pathnames=glob.glob(src)
+            if len(pathnames)==0:
+                error("No files matching '%s' found" % (src,))
+                if filesMustExist:
+                    sys.exit(6)
+            else:
+                for pathname in pathnames:
+                    copy(pathname, destdir)
 
     if conditionals:
         error("'%endif' directive missing")
@@ -483,6 +496,7 @@ def usage():
     print "          -a             reset read-only attributes"
     print "          -c             don't create empty directories"
     print "          -m             generate md5sums in logfile"
+    print "          -e             initialize variables from environment"
     print "          -l logfile     write log file"
     print "          -D name=value  preset variable"
     print
@@ -492,7 +506,7 @@ def usage():
 def main(argv):
     if len(argv)<2: usage()
     try:
-        optlist, argv = getopt.getopt(argv[1:], "D:l:fnvwacmq")
+        optlist, argv = getopt.getopt(argv[1:], "D:l:efnvwacmq")
     except getopt.error,msg:
         print msg
         usage()
@@ -510,6 +524,11 @@ def main(argv):
     global md5sums; md5sums=None
 
     variables={} # predefined variables
+
+    if ('-e','') in optlist:
+        # initialize variables from environment
+        for envVar,envVal in os.environ.items():
+            variables[envVar] = envVal
 
     for opt,val in optlist:
         if opt=="-v":
@@ -543,6 +562,8 @@ def main(argv):
                 usage()
         elif opt=="-m":
             md5sums=1
+        elif opt=="-e":
+            pass # handled above
         else:
             error("Unknown option: %s" % (opt,))
             usage()

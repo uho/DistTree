@@ -17,24 +17,24 @@
 OK=false
 
 %if $TESTVAR==
-%print TESTVAR ist leer
+%print TESTVAR is empty
 OK=true
 %else
-%print TESTVAR ist nicht leer sondern hat den Wert '$TESTVAR'
+%print TESTVAR is not empty but has value '$TESTVAR'
 %endif
 
 %if $TESTVAR==one
-%print TESTVAR ist 'one'
+%print TESTVAR is 'one'
 OK=true
 %else
-%print TESTVAR hat nicht den Wert 'one' sondern '$TESTVAR'
+%print TESTVAR does not have the value 'one' but '$TESTVAR'
 %endif
 
 %if $OK==true
-%print TESTVAR ist leer oder hat den Wert 'one'
+%print TESTVAR is empty or has value 'one'
 %error done
 %else
-%print TESTVAR ist nicht leer und auch nicht 'one' sondern '$TESTVAR'
+%print TESTVAR is not empty and neither has value 'one' but '$TESTVAR'
 %endif
 
 
@@ -49,12 +49,12 @@ $SRC/disttree.py
 $TST/demotree.spec
 @ rm -f newname; mv disttree.py newname; chmod 444 newname
 
-$SRC/*.xlerb
+$TST/*xlerb
 
 "$TST/demotree.spec"
 "$TST/@xlerb"
 
-# Do wildcards work? Not in version 1.06
+# Do wildcards work? Use quote to have * in a name
 "$TST/*tree.spec"
 $TST/*tree.spec
 
