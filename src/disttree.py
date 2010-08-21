@@ -2,7 +2,7 @@
 #
 #    File Name: disttree.py
 #
-#    Revision : 1.01
+#    Revision : 1.02
 #
 #    Purpose  : copy files to a distribution tree
 #
@@ -12,52 +12,73 @@
 #
 #    Author       Date        Comments
 #    ------------------------------------------------------------------------
+#    UHoffmann    25Jan2000   added -f option
+#    UHoffmann    25Jan2000   added -D option
 #    UHoffmann    10Jan2000   added -w option
 #    UHoffmann    10Jan2000   added -n option
 #    UHoffmann    06Jan2000   initial version
 #
 # - End Header --------------------------------------------------------------
 
-import os, sys, shutil, time, getopt, glob, re
+import os, sys, shutil, getopt, re
 
 verbose=0
 lino=0
 simulation=0
 filesMustExist=0
+force=0
+
+assignement=re.compile("[ \t]*([_a-zA-Z][_a-zA-Z0-9]*)[ \t]*=(.*)$")
 
 def error(message):
-    print "%s: %s in line %d!" % (os.path.basename(sys.argv[0]),message,lino)
+    if lino==0:
+        print "%s: %s on command line!" % (os.path.basename(sys.argv[0]),
+                                           message)
+    else:
+        print "%s: %s in line %d!" % (os.path.basename(sys.argv[0]),
+                                      message,lino)
 
-def copy(src,dest):
+def copy(src,destdir):
     if os.path.isdir(src):
         for file in os.listdir(src):
             if os.path.isdir(src+os.sep+file):
-                if not os.path.isdir(dest+os.sep+file):
+                # destdir+os.sep+file denotes a destination directory
+                if not os.path.isdir(destdir+os.sep+file):
                     try:
                         if not simulation:
-                            os.makedirs(dest+os.sep+file)
+                            os.makedirs(destdir+os.sep+file)
                     except OSError,msg:
                         error("Cannot create directory %s (%s)" % (destdir,msg))
                         sys.exit(8)
-                copy(src+os.sep+file,dest+os.sep+file)
+                copy(src+os.sep+file,destdir+os.sep+file)
             else:
-                copy(src+os.sep+file,dest)
+                copy(src+os.sep+file,destdir)
 
     elif os.path.isfile(src):
         try:
             if not simulation:
-                shutil.copy2(src,dest)
+                try:
+                    shutil.copy2(src,destdir)
+                except:
+                    destfile=destdir+os.sep+os.path.basename(src)
+                    if force and os.path.exists(destfile):
+                        os.chmod(destfile,0777)
+                        os.remove(destfile)
+                        shutil.copy2(src,destdir)
+                    else:
+                        type,value=sys.exc_info()[:2]
+                        raise type, value
         except IOError, msg:
             if verbose:
-                print "%-40s -|-> %s" % (src,dest),
+                print "%-40s -|-> %s" % (src,destdir),
             error("Copy failed for file %s (%s)" % (src,msg))
             sys.exit(3)
 
         if verbose:
-            print "%-40s ---> %s" % (src,dest)
+            print "%-40s ---> %s" % (src,destdir)
 
     else:
-        # no dir nor file
+        # src no dir nor file
         error("File '%s' not found" % (src,))
         if filesMustExist:
             sys.exit(6)
@@ -92,12 +113,11 @@ def subst(str,dict):
     return re.sub("\\$\\$","$",str)
 
 
-def disttree(specfilename):
+def disttree(specfilename, variables={}):
     comment=re.compile("[ \t]*#.*$")
-    assignement=re.compile("[ \t]*([_a-zA-Z][_a-zA-Z0-9]*)[ \t]*=(.*)$")
+    global assignement
     destdirspec=re.compile("[ \t]*\[(.*)\]")
 
-    variables={}
     destdir=""
     global lino
     lino=0
@@ -144,21 +164,25 @@ def disttree(specfilename):
 
 
 def usage():
+    name = os.path.basename(sys.argv[0])
     print "Distribution Tree Creator"
     print "Create a distribution tree according to disttreespec"
     print
-    print ("Usage: python %s [options] disttreespec" %
-           (os.path.basename(sys.argv[0]),))
+    print "Usage: python %s [options] disttreespec" % (name,)
     print "       options:"
-    print "          -v verbose"
-    print "          -n don't actually perform copy"
-    print "          -w just warn if a file does not exist"
+    print "          -v             verbose"
+    print "          -n             don't actually perform copy"
+    print "          -w             just warn if a file does not exist"
+    print "          -f             force (overwrite existing r/o files)"
+    print "          -D name=value  preset variable"
+    print
+    print "Example: python %s -v -D DST=X:\ distribution.spec" % (name,)
     sys.exit(99)
 
 def main(argv):
     if len(argv)<2: usage()
     try:
-        optlist, argv = getopt.getopt(argv[1:], "vwn")
+        optlist, argv = getopt.getopt(argv[1:], "D:fnvw")
     except getopt.error,msg:
         print msg
         usage()
@@ -168,6 +192,9 @@ def main(argv):
     global verbose; verbose=0
     global simulation; simulation=0
     global filesMustExist; filesMustExist=1
+    global force; force=0
+
+    variables={} # predefined variables
 
     for opt,val in optlist:
         if opt=="-v":
@@ -176,6 +203,18 @@ def main(argv):
             simulation=1
         elif opt=="-w":
             filesMustExist=0
+        elif opt=="-f":
+            force=1
+        elif opt=="-D":
+            global assignement
+            m=assignement.match(val)
+            if m:
+                var=m.group(1)
+                expr=subst(m.group(2),variables)
+                variables[var] = subst(expr,variables)
+            else:
+                error("Illegal parameter '%s' to -D option" % (val,))
+                usage()
         else:
             error("Unknown option: %s" % (opt,))
             usage()
@@ -186,7 +225,7 @@ def main(argv):
     disttreespec=argv[0]
 
     # do it
-    disttree(disttreespec)
+    disttree(disttreespec,variables)
 
     return 0
 
