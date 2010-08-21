@@ -1,0 +1,20 @@
+To run tests, go to the DistTree root directory
+then execute
+
+   python src/disttree.py -DTESTVAR=one -w src/test/demotree.spec
+
+This will do some testing, then stop.
+
+Run
+
+   python src/disttree.py -DTESTVAR=hello -w src/test/demotree.spec
+
+this will create a distribution directory tmp/disttree and
+will copy files there, as specified in demotree.spec
+
+You can add the -n option for a dry run.
+You can add the -v option to see more output.
+
+You can inspect the resulting distribution tree.
+
+Currently there is no automatic testing, sorry.
