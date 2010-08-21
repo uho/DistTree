@@ -1,0 +1,3 @@
+DistTree is a tool and a small specification language to
+conviniently describe the mapping from build trees to
+distribution trees for software deployment.
